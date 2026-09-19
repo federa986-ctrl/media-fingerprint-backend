@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: media-fingerprint-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /api/healthz
+    autoDeploy: true

@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: fingerprint
+    description: Ephemeral media fingerprinting operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /v1/fingerprint:
+    post:
+      operationId: fingerprintMedia
+      tags: [fingerprint]
+      summary: Fingerprint an uploaded media file
+      description: |
+        Streams an image, audio file, or video into an ephemeral worker queue.
+        The service returns whole-file hashes plus per-second perceptual
+        fingerprints. Uploaded bytes are removed after processing and are not
+        persisted.
+      parameters:
+        - name: interval_ms
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 100
+            maximum: 60000
+            default: 1000
+          description: Sampling interval for video frames and audio windows.
+        - name: max_samples
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3600
+            default: 3600
+          description: Maximum samples returned for each media stream.
+        - name: include_video
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: include_audio
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: include_image
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+            example: Binary media bytes
+      responses:
+        "200":
+          description: Fingerprints generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FingerprintResponse"
+        "413":
+          description: Upload exceeds the configured limit
+        "415":
+          description: Media format could not be decoded
+        "429":
+          description: Fingerprint queue is full
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        workers:
+          type: integer
+        queue_capacity:
+          type: integer
+        queue_depth:
+          type: integer
+        in_flight_capacity:
+          type: integer
+        in_flight:
+          type: integer
+        temp_bytes_in_use:
+          type: integer
+          format: int64
+        max_temp_bytes:
+          type: integer
+          format: int64
+        max_upload_bytes:
+          type: integer
+          format: int64
+        default_interval_ms:
+          type: integer
+      required:
+        - status
+    Hashes:
+      type: object
+      properties:
+        sha256:
+          type: string
+        md5:
+          type: string
+      required: [sha256, md5]
+    VideoSample:
+      type: object
+      properties:
+        timestamp_ms:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        perceptual_hash:
+          type: string
+      required: [timestamp_ms, sha256, perceptual_hash]
+    VideoFingerprint:
+      type: object
+      properties:
+        interval_ms:
+          type: integer
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoSample"
+      required: [interval_ms, samples]
+    AudioSample:
+      type: object
+      properties:
+        timestamp_ms:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        signature:
+          type: string
+        rms:
+          type: number
+          format: double
+      required: [timestamp_ms, sha256, signature, rms]
+    AudioFingerprint:
+      type: object
+      properties:
+        interval_ms:
+          type: integer
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/AudioSample"
+      required: [interval_ms, samples]
+    ImageFingerprint:
+      type: object
+      properties:
+        sha256:
+          type: string
+        md5:
+          type: string
+        perceptual_hash:
+          type: string
+      required: [sha256, md5, perceptual_hash]
+    FingerprintResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        media_kind:
+          type: string
+          enum: [image, audio, video, unknown]
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+        hashes:
+          $ref: "#/components/schemas/Hashes"
+        duration_seconds:
+          type: number
+          format: double
+        queue_wait_ms:
+          type: integer
+          format: int64
+        processing_ms:
+          type: integer
+          format: int64
+        video:
+          $ref: "#/components/schemas/VideoFingerprint"
+        audio:
+          $ref: "#/components/schemas/AudioFingerprint"
+        image:
+          $ref: "#/components/schemas/ImageFingerprint"
+      required:
+        - request_id
+        - media_kind
+        - content_type
+        - size_bytes
+        - hashes
+        - queue_wait_ms
+        - processing_ms
+
